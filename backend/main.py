@@ -3,8 +3,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, Any, Optional
 import uvicorn
+import requests
+from uuid import uuid4
+
 
 app = FastAPI(title="Weather Data System", version="1.0.0")
+
+#WEATHERSTACK_API_KEY = "7acb248061875325a6c2726a1c8783f6"
+WEATHERSTACK_BASE_URL = "http://api.weatherstack.com/current"
 
 app.add_middleware(
     CORSMiddleware,
@@ -27,14 +33,33 @@ class WeatherResponse(BaseModel):
 
 @app.post("/weather", response_model=WeatherResponse)
 async def create_weather_request(request: WeatherRequest):
-    """
-    You need to implement this endpoint to handle the following:
-    1. Receive form data (date, location, notes)
-    2. Calls WeatherStack API for the location
-    3. Stores combined data with unique ID in memory
-    4. Returns the ID to frontend
-    """
-    pass
+    params = {
+        "access_key": "7acb248061875325a6c2726a1c8783f6",
+        "query": request.location,
+    }
+    response = requests.get(WEATHERSTACK_BASE_URL, params=params)
+    weather_data = response.json()
+    print(weather_data)
+
+    if "error" in weather_data:
+        raise HTTPException(status_code=400, detail="Error fetching weather data")
+    
+    weather_id = str(uuid4())
+    weather_storage[weather_id] = {
+        "id": weather_id,
+        "date": request.date,
+        "location": request.location,
+        "notes": request.notes,
+        "current": {
+            "observation_time": weather_data["current"]["observation_time"],
+            "temperature": weather_data["current"]["temperature"],
+            "weather_descriptions": weather_data["current"]["weather_descriptions"],
+            "humidity": weather_data["current"]["humidity"],
+            "wind_speed": weather_data["current"]["wind_speed"],
+        },
+    }
+
+    return {"id": weather_id}
 
 @app.get("/weather/{weather_id}")
 async def get_weather_data(weather_id: str):
@@ -49,4 +74,4 @@ async def get_weather_data(weather_id: str):
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="127.0.0.1", port=8000)
